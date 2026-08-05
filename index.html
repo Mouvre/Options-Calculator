@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Options P&L Terminal</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg: #0B0E14;
+  --panel: #131824;
+  --panel-2: #171E2C;
+  --line: #232B3D;
+  --text: #E4E7EC;
+  --text-dim: #7C8798;
+  --amber: #F0B429;
+  --green: #3DDC84;
+  --red: #FF5C5C;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  padding: 32px 20px;
+}
+
+.wrap{
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.masthead{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.masthead h1{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+.masthead h1 span{
+  color: var(--amber);
+}
+
+.masthead .ticker-tag{
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.grid{
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 800px){
+  .grid{ grid-template-columns: 1fr; }
+}
+
+.panel{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.panel h2{
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 16px 0;
+}
+
+.field{
+  margin-bottom: 14px;
+}
+
+.field label{
+  display:block;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+  letter-spacing: 0.03em;
+}
+
+.field input, .field select{
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 9px 10px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.field input:focus, .field select:focus{
+  border-color: var(--amber);
+}
+
+.toggle-row{
+  display:flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.toggle-btn{
+  flex:1;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.toggle-btn.active[data-kind="call"]{ background: rgba(61,220,132,0.12); border-color: var(--green); color: var(--green); }
+.toggle-btn.active[data-kind="put"]{ background: rgba(255,92,92,0.12); border-color: var(--red); color: var(--red); }
+.toggle-btn.active[data-kind="long"]{ background: rgba(240,180,41,0.12); border-color: var(--amber); color: var(--amber); }
+.toggle-btn.active[data-kind="short"]{ background: rgba(240,180,41,0.12); border-color: var(--amber); color: var(--amber); }
+
+.right-col{
+  display:flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.result-panel{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 24px;
+}
+
+.result-top{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.big-number{
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.big-number.pos{ color: var(--green); }
+.big-number.neg{ color: var(--red); }
+
+.big-sub{
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  letter-spacing: 0.03em;
+}
+
+.stat-strip{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.stat-strip.greeks{
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 12px;
+}
+
+@media (max-width: 560px){
+  .stat-strip, .stat-strip.greeks{ grid-template-columns: repeat(2, 1fr); }
+}
+
+.stat{
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.stat .stat-label{
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.stat .stat-value{
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chart-panel{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+svg text{ font-family: var(--font-mono); }
+
+.slider-row{
+  margin-top: 14px;
+  display:flex;
+  align-items:center;
+  gap: 14px;
+}
+
+.slider-row input[type="range"]{
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  outline: none;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.slider-row input[type="range"]::-moz-range-thumb{
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.slider-readout{
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 210px;
+  text-align: right;
+}
+
+.slider-readout .pos{ color: var(--green); }
+.slider-readout .neg{ color: var(--red); }
+
+.disclaimer{
+  margin-top: 20px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>OPTIONS <span>P&amp;L</span> TERMINAL</h1>
+    <div class="ticker-tag">Theoretical exit &middot; Black-Scholes model</div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Position</h2>
+
+      <div class="toggle-row">
+        <button class="toggle-btn active" data-kind="call" onclick="setType('call')">CALL</button>
+        <button class="toggle-btn" data-kind="put" onclick="setType('put')">PUT</button>
+      </div>
+      <div class="toggle-row">
+        <button class="toggle-btn active" data-kind="long" onclick="setSide('long')">BUY (LONG)</button>
+        <button class="toggle-btn" data-kind="short" onclick="setSide('short')">SELL (SHORT)</button>
+      </div>
+
+      <div class="field">
+        <label>Strike price ($)</label>
+        <input type="number" id="strike" value="150" step="0.5">
+      </div>
+      <div class="field">
+        <label>Contracts</label>
+        <input type="number" id="contracts" value="1" step="1" min="1">
+      </div>
+      <div class="field">
+        <label>Premium paid / received per share ($)</label>
+        <input type="number" id="premium" value="5.00" step="0.01">
+      </div>
+
+      <h2 style="margin-top:22px;">Timing</h2>
+      <div class="field">
+        <label>Option expiration date</label>
+        <input type="date" id="expDate">
+      </div>
+      <div class="field">
+        <label>Theoretical sell date</label>
+        <input type="date" id="sellDate">
+      </div>
+
+      <h2 style="margin-top:22px;">Market assumption on sell date</h2>
+      <div class="field">
+        <label>Theoretical stock price ($)</label>
+        <input type="number" id="targetPrice" value="160" step="0.5">
+      </div>
+      <div class="field">
+        <label>Implied volatility (%)</label>
+        <input type="number" id="iv" value="35" step="0.5">
+      </div>
+      <div class="field">
+        <label>Risk-free rate (%)</label>
+        <input type="number" id="rate" value="3.78" step="0.01">
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div class="result-panel">
+        <div class="result-top">
+          <div>
+            <div class="big-number" id="pctOut">--%</div>
+            <div class="big-sub" id="dollarOut">--</div>
+          </div>
+        </div>
+        <div class="stat-strip">
+          <div class="stat">
+            <div class="stat-label">Est. option value</div>
+            <div class="stat-value" id="statValue">--</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Days left at sell</div>
+            <div class="stat-value" id="statDays">--</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Breakeven stock px</div>
+            <div class="stat-value" id="statBreakeven">--</div>
+          </div>
+        </div>
+        <div class="stat-strip greeks">
+          <div class="stat">
+            <div class="stat-label">Delta</div>
+            <div class="stat-value" id="statDelta">--</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Theta ($/day)</div>
+            <div class="stat-value" id="statTheta">--</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Gamma</div>
+            <div class="stat-value" id="statGamma">--</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Vega ($/1% IV)</div>
+            <div class="stat-value" id="statVega">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <h2 id="decayTitle">Time decay: P&amp;L if price stays flat</h2>
+        <div id="decayChartHolder"></div>
+        <div class="slider-row">
+          <input type="range" id="decaySlider" min="0" max="100" value="0">
+          <div class="slider-readout" id="sliderReadout">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    This model uses Black-Scholes pricing to estimate what your option would theoretically be worth on the sell date you choose, based on the stock price, implied volatility, and time remaining. Delta, gamma, theta, and vega shown above are calculated from these inputs, not entered — they reflect the sensitivities at your chosen scenario and will shift as price, time, and volatility change. Real market prices can differ due to bid/ask spreads, liquidity, volatility skew, and other factors — treat this as an estimate for planning, not a quote.
+  </div>
+
+</div>
+
+<script>
+let optType = 'call';
+let side = 'long';
+
+function setType(t){
+  optType = t;
+  document.querySelectorAll('[data-kind="call"],[data-kind="put"]').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-kind="'+t+'"]').classList.add('active');
+  calc();
+}
+function setSide(s){
+  side = s;
+  document.querySelectorAll('[data-kind="long"],[data-kind="short"]').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-kind="'+s+'"]').classList.add('active');
+  calc();
+}
+
+function erf(x){
+  const sign = x >= 0 ? 1 : -1;
+  x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1 - (((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normCDF(x){ return 0.5*(1+erf(x/Math.sqrt(2))); }
+function normPDF(x){ return Math.exp(-x*x/2)/Math.sqrt(2*Math.PI); }
+
+function greeks(S,K,T,r,sigma,type){
+  if(T<=0 || sigma<=0){
+    return { delta: type==='call' ? (S>K?1:0) : (S<K?-1:0), gamma:0, theta:0, vega:0 };
+  }
+  const d1 = (Math.log(S/K)+(r+sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  const d2 = d1 - sigma*Math.sqrt(T);
+  const pdf1 = normPDF(d1);
+
+  const delta = type==='call' ? normCDF(d1) : normCDF(d1)-1;
+  const gamma = pdf1/(S*sigma*Math.sqrt(T));
+  const vegaAnnual = S*pdf1*Math.sqrt(T); // per 1.00 (100%) change in vol
+  const vega = vegaAnnual/100; // per 1% change in vol
+
+  let thetaAnnual;
+  if(type==='call'){
+    thetaAnnual = -(S*pdf1*sigma)/(2*Math.sqrt(T)) - r*K*Math.exp(-r*T)*normCDF(d2);
+  } else {
+    thetaAnnual = -(S*pdf1*sigma)/(2*Math.sqrt(T)) + r*K*Math.exp(-r*T)*normCDF(-d2);
+  }
+  const theta = thetaAnnual/365; // per calendar day
+
+  return { delta, gamma, theta, vega };
+}
+
+function bsPrice(S,K,T,r,sigma,type){
+  if(T<=0){ return type==='call' ? Math.max(S-K,0) : Math.max(K-S,0); }
+  if(sigma<=0) sigma = 0.0001;
+  const d1 = (Math.log(S/K)+(r+sigma*sigma/2)*T)/(sigma*Math.sqrt(T));
+  const d2 = d1 - sigma*Math.sqrt(T);
+  if(type==='call'){
+    return S*normCDF(d1) - K*Math.exp(-r*T)*normCDF(d2);
+  } else {
+    return K*Math.exp(-r*T)*normCDF(-d2) - S*normCDF(-d1);
+  }
+}
+
+function findBreakeven(K,T,r,sigma,type,premium){
+  let lo = 0.01, hi = K*5;
+  for(let i=0;i<60;i++){
+    const mid = (lo+hi)/2;
+    const val = bsPrice(mid,K,T,r,sigma,type);
+    if(val < premium){ lo = mid; } else { hi = mid; }
+  }
+  return (lo+hi)/2;
+}
+
+function fmtMoney(v){
+  const sign = v<0 ? '-' : '';
+  return sign + '$' + Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function daysBetween(a,b){
+  return Math.round((b-a)/(1000*60*60*24));
+}
+
+function calc(){
+  const K = parseFloat(document.getElementById('strike').value)||0;
+  const contracts = parseFloat(document.getElementById('contracts').value)||0;
+  const premium = parseFloat(document.getElementById('premium').value)||0;
+  const S = parseFloat(document.getElementById('targetPrice').value)||0;
+  const ivPct = parseFloat(document.getElementById('iv').value)||0;
+  const ratePct = parseFloat(document.getElementById('rate').value)||0;
+  const expStr = document.getElementById('expDate').value;
+  const sellStr = document.getElementById('sellDate').value;
+
+  const sigma = ivPct/100;
+  const r = ratePct/100;
+
+  let daysLeft = 0;
+  if(expStr && sellStr){
+    const exp = new Date(expStr+'T00:00:00');
+    const sell = new Date(sellStr+'T00:00:00');
+    daysLeft = daysBetween(sell, exp);
+  }
+  const T = Math.max(daysLeft,0)/365;
+
+  const optVal = bsPrice(S,K,T,r,sigma,optType);
+  const multiplier = 100 * contracts;
+
+  const costBasis = premium * multiplier;
+  let dollarPL;
+  if(side==='long'){
+    dollarPL = (optVal - premium) * multiplier;
+  } else {
+    dollarPL = (premium - optVal) * multiplier;
+  }
+  const pct = costBasis !== 0 ? (dollarPL / costBasis) * 100 : 0;
+
+  const pctOut = document.getElementById('pctOut');
+  pctOut.textContent = (pct>=0?'+':'') + pct.toFixed(1) + '%';
+  pctOut.className = 'big-number ' + (pct>=0 ? 'pos':'neg');
+
+  document.getElementById('dollarOut').textContent =
+    (dollarPL>=0?'Gain of ':'Loss of ') + fmtMoney(Math.abs(dollarPL)) +
+    ' on ' + fmtMoney(costBasis) + (side==='long' ? ' paid' : ' collected');
+
+  document.getElementById('statValue').textContent = fmtMoney(optVal) + ' / share';
+  document.getElementById('statDays').textContent = daysLeft + ' days';
+
+  const breakeven = findBreakeven(K,T,r,sigma,optType,premium);
+  document.getElementById('statBreakeven').textContent = '$' + breakeven.toFixed(2);
+
+  const g = greeks(S,K,T,r,sigma,optType);
+  const sideMult = side==='long' ? 1 : -1;
+  document.getElementById('statDelta').textContent = (g.delta*sideMult).toFixed(3);
+  document.getElementById('statTheta').textContent = fmtMoney(g.theta*multiplier*sideMult) + '/day';
+  document.getElementById('statGamma').textContent = g.gamma.toFixed(4);
+  document.getElementById('statVega').textContent = fmtMoney(g.vega*multiplier*sideMult);
+
+  document.getElementById('decayTitle').textContent = 'Time decay: P&L if stock stays at $' + S.toFixed(2);
+  const expObj = expStr ? new Date(expStr+'T00:00:00') : null;
+  const sellObj = sellStr ? new Date(sellStr+'T00:00:00') : null;
+  drawDecayChart(K,r,sigma,optType,premium,multiplier,side,S,costBasis,expObj,sellObj);
+}
+
+let decayState = null; // { pts, xPix, yPix, w, h, padT, padB, totalDays, today, dollarPerPct }
+
+function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj){
+  const holder = document.getElementById('decayChartHolder');
+  const slider = document.getElementById('decaySlider');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  if(!expObj || isNaN(expObj.getTime()) || expObj <= today){
+    holder.innerHTML = '<div style="color:#7C8798; font-size:12px; padding: 20px 0;">Set a future expiration date to see the decay curve.</div>';
+    decayState = null;
+    slider.disabled = true;
+    return;
+  }
+  slider.disabled = false;
+
+  const totalDays = daysBetween(today, expObj);
+  const w = 1000, h = 300;
+  const padL = 60, padR = 20, padT = 30, padB = 34;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+
+  const pts = [];
+  let minPct = Infinity, maxPct = -Infinity;
+  for(let d=0; d<=totalDays; d++){
+    const daysLeft = totalDays - d;
+    const T = daysLeft/365;
+    const val = bsPrice(fixedS,K,T,r,sigma,type);
+    const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
+    const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
+    pts.push({ day:d, pct, dollarPL: pl });
+    if(pct<minPct) minPct=pct;
+    if(pct>maxPct) maxPct=pct;
+  }
+  if(minPct>0) minPct=0;
+  if(maxPct<0) maxPct=0;
+  const pad = (maxPct-minPct)*0.1 || 10;
+  minPct -= pad; maxPct += pad;
+
+  function xPix(d){ return padL + (d/totalDays)*plotW; }
+  function yPix(p){ return padT + (1-(p-minPct)/(maxPct-minPct))*plotH; }
+  const zeroY = yPix(0);
+
+  let linePath = '';
+  pts.forEach((pt,i)=>{
+    const x = xPix(pt.day), y = yPix(pt.pct);
+    linePath += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+  });
+  const firstX = xPix(0), lastX = xPix(totalDays);
+  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+zeroY.toFixed(1)+' L'+firstX.toFixed(1)+','+zeroY.toFixed(1)+' Z';
+  const endPct = pts[pts.length-1].pct;
+  const areaColor = endPct>=0 ? 'rgba(61,220,132,0.10)' : 'rgba(255,92,92,0.10)';
+
+  let gridLines = '';
+  const numGrid = 5;
+  for(let i=0;i<=numGrid;i++){
+    const val = minPct + (maxPct-minPct)*i/numGrid;
+    const y = yPix(val);
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#232B3D" stroke-width="1"/>`;
+    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7C8798">${val.toFixed(0)}%</text>`;
+  }
+
+  let xLabels = '';
+  const numX = Math.min(6, totalDays);
+  for(let i=0;i<=numX;i++){
+    const dVal = Math.round(totalDays*i/numX);
+    const dateLabel = new Date(today.getTime()+dVal*24*60*60*1000);
+    const x = xPix(dVal);
+    const lbl = (dateLabel.getMonth()+1)+'/'+dateLabel.getDate();
+    xLabels += `<text x="${x.toFixed(1)}" y="${h-padB+18}" text-anchor="middle" font-size="10" fill="#7C8798">${lbl}</text>`;
+  }
+
+  const svg = `
+  <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    ${gridLines}
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#F0B429" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <path d="${areaPath}" fill="${areaColor}"/>
+    <path d="${linePath}" fill="none" stroke="#F0B429" stroke-width="2"/>
+    ${xLabels}
+    <g id="scrubMarker"></g>
+  </svg>`;
+  holder.innerHTML = svg;
+
+  decayState = { pts, xPix, yPix, padT, padB, h, today };
+
+  slider.max = totalDays;
+  let sliderDay = parseInt(slider.value, 10);
+  if(isNaN(sliderDay) || sliderDay > totalDays){
+    sliderDay = sellObj && !isNaN(sellObj.getTime()) ? Math.min(Math.max(daysBetween(today, sellObj),0), totalDays) : 0;
+  }
+  slider.value = sliderDay;
+  updateScrubMarker(sliderDay);
+}
+
+function updateScrubMarker(day){
+  if(!decayState) return;
+  const { pts, xPix, yPix, padT, h, padB, today } = decayState;
+  day = Math.max(0, Math.min(day, pts.length-1));
+  const pt = pts[day];
+  const x = xPix(pt.day), y = yPix(pt.pct);
+  const color = pt.pct>=0 ? '#3DDC84' : '#FF5C5C';
+
+  const g = document.getElementById('scrubMarker');
+  if(g){
+    g.innerHTML = `
+      <line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h-padB}" stroke="#7C8798" stroke-width="1" stroke-dasharray="3,3"/>
+      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${color}" stroke="#0B0E14" stroke-width="2"/>
+    `;
+  }
+
+  const dateLabel = new Date(today.getTime()+pt.day*24*60*60*1000);
+  const dateStr = dateLabel.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+  const pctStr = (pt.pct>=0?'+':'') + pt.pct.toFixed(1) + '%';
+  const dollarStr = fmtMoney(pt.dollarPL);
+  const cls = pt.pct>=0 ? 'pos' : 'neg';
+
+  document.getElementById('sliderReadout').innerHTML =
+    `${dateStr} &nbsp; <span class="${cls}">${pctStr} (${dollarStr})</span>`;
+}
+
+document.getElementById('decaySlider').addEventListener('input', (e)=>{
+  updateScrubMarker(parseInt(e.target.value,10));
+});
+
+function initDates(){
+  const today = new Date();
+  const exp = new Date(today.getTime() + 45*24*60*60*1000);
+  const sell = new Date(today.getTime() + 20*24*60*60*1000);
+  document.getElementById('expDate').value = exp.toISOString().slice(0,10);
+  document.getElementById('sellDate').value = sell.toISOString().slice(0,10);
+}
+
+document.querySelectorAll('input').forEach(el=>{
+  el.addEventListener('input', calc);
+});
+
+initDates();
+calc();
+</script>
+</body>
+</html>

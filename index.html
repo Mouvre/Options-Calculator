@@ -545,6 +545,10 @@ svg text{ font-family: var(--font-mono); }
 
       <div class="chart-panel">
         <h2 id="decayTitle">Time decay: P&amp;L if price stays flat</h2>
+        <div id="intradayCloseRow" class="field" style="display:none; max-width:220px; margin-bottom:14px;">
+          <label>Market close time today</label>
+          <input type="time" id="intradayCloseTime" value="13:00">
+        </div>
         <div id="decayChartHolder"></div>
         <div class="slider-row">
           <input type="range" id="decaySlider" min="0" max="100" value="0">
@@ -630,18 +634,19 @@ svg text{ font-family: var(--font-mono); }
 
     <div class="panel">
       <div class="trades-header">
-        <h2 style="margin:0;">Trades</h2>
+        <h2 style="margin:0;">Your Trades</h2>
         <div class="trades-header-actions">
           <button class="row-btn" onclick="exportTrades()">Export</button>
           <button class="row-btn" onclick="document.getElementById('importFileInput').click()">Import</button>
           <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="handleImportFile(event)">
         </div>
       </div>
+      <div style="font-size:11px; color:var(--text-dim); margin:-10px 0 14px 0;">Open entries into the same contract (ticker, type, strike, expiration, side) are combined into one row with a blended average price. Closed trades are listed individually so each exit keeps its own price and date.</div>
       <div style="overflow-x:auto;">
         <table class="trade-table" id="tradeTable">
           <thead>
             <tr>
-              <th>Ticker</th><th>Type</th><th>Side</th><th>Strike</th><th>Qty</th>
+              <th>Ticker</th><th>Type</th><th>Side</th><th>Strike</th><th>Exp</th><th>Qty</th>
               <th>Entry Px</th><th>Entry Date</th><th>Status</th><th>Exit Px</th><th>Exit Date</th>
               <th>$ P&amp;L</th><th>% P&amp;L</th><th></th>
             </tr>
@@ -798,21 +803,43 @@ function calc(){
   drawDecayChart(K,r,sigma,optType,premium,multiplier,side,S,costBasis,expObj,sellObj);
 }
 
-let decayState = null; // { pts, xPix, yPix, w, h, padT, padB, totalDays, today, dollarPerPct }
+let decayState = null; // { mode, pts, xPix, yPix, w, h, padT, padB }
+
+function isSameCalendarDay(a,b){
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
 
 function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj){
   const holder = document.getElementById('decayChartHolder');
   const slider = document.getElementById('decaySlider');
+  const closeRow = document.getElementById('intradayCloseRow');
   const today = new Date();
   today.setHours(0,0,0,0);
 
-  if(!expObj || isNaN(expObj.getTime()) || expObj <= today){
-    holder.innerHTML = '<div style="color:#7C8798; font-size:12px; padding: 20px 0;">Set a future expiration date to see the decay curve.</div>';
+  if(!expObj || isNaN(expObj.getTime()) || expObj < today){
+    holder.innerHTML = '<div style="color:#7C8798; font-size:12px; padding: 20px 0;">Set a future (or today\'s) expiration date to see the decay curve.</div>';
     decayState = null;
     slider.disabled = true;
+    closeRow.style.display = 'none';
     return;
   }
+
+  const sameDay = isSameCalendarDay(today, expObj);
+
+  if(sameDay){
+    closeRow.style.display = '';
+    drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis);
+  } else {
+    closeRow.style.display = 'none';
+    drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj,today);
+  }
+}
+
+function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj,today){
+  const holder = document.getElementById('decayChartHolder');
+  const slider = document.getElementById('decaySlider');
   slider.disabled = false;
+  slider.step = 1;
 
   const totalDays = daysBetween(today, expObj);
   const w = 1000, h = 300;
@@ -827,7 +854,7 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
     const val = bsPrice(fixedS,K,T,r,sigma,type);
     const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
     const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
-    pts.push({ day:d, pct, dollarPL: pl });
+    pts.push({ idx:d, pct, dollarPL: pl });
     if(pct<minPct) minPct=pct;
     if(pct>maxPct) maxPct=pct;
   }
@@ -836,13 +863,13 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
   const pad = (maxPct-minPct)*0.1 || 10;
   minPct -= pad; maxPct += pad;
 
-  function xPix(d){ return padL + (d/totalDays)*plotW; }
+  function xPix(d){ return padL + (d/Math.max(totalDays,1))*plotW; }
   function yPix(p){ return padT + (1-(p-minPct)/(maxPct-minPct))*plotH; }
   const zeroY = yPix(0);
 
   let linePath = '';
   pts.forEach((pt,i)=>{
-    const x = xPix(pt.day), y = yPix(pt.pct);
+    const x = xPix(pt.idx), y = yPix(pt.pct);
     linePath += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
   });
   const firstX = xPix(0), lastX = xPix(totalDays);
@@ -860,7 +887,7 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
   }
 
   let xLabels = '';
-  const numX = Math.min(6, totalDays);
+  const numX = Math.min(6, Math.max(totalDays,1));
   for(let i=0;i<=numX;i++){
     const dVal = Math.round(totalDays*i/numX);
     const dateLabel = new Date(today.getTime()+dVal*24*60*60*1000);
@@ -880,23 +907,137 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
   </svg>`;
   holder.innerHTML = svg;
 
-  decayState = { pts, xPix, yPix, padT, padB, h, today };
+  decayState = { mode:'daily', pts, xPix, yPix, padT, padB, h, baseTime: today };
 
   slider.max = totalDays;
-  let sliderDay = parseInt(slider.value, 10);
-  if(isNaN(sliderDay) || sliderDay > totalDays){
-    sliderDay = sellObj && !isNaN(sellObj.getTime()) ? Math.min(Math.max(daysBetween(today, sellObj),0), totalDays) : 0;
+  let sliderIdx = parseInt(slider.value, 10);
+  if(isNaN(sliderIdx) || sliderIdx > totalDays){
+    sliderIdx = sellObj && !isNaN(sellObj.getTime()) ? Math.min(Math.max(daysBetween(today, sellObj),0), totalDays) : 0;
   }
-  slider.value = sliderDay;
-  updateScrubMarker(sliderDay);
+  slider.value = sliderIdx;
+  updateScrubMarker(sliderIdx);
 }
 
-function updateScrubMarker(day){
+function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis){
+  const holder = document.getElementById('decayChartHolder');
+  const slider = document.getElementById('decaySlider');
+  const closeTimeVal = document.getElementById('intradayCloseTime').value || '13:00';
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const closeDateTime = new Date(todayStr + 'T' + closeTimeVal + ':00');
+
+  if(closeDateTime <= now){
+    holder.innerHTML = '<div style="color:#7C8798; font-size:12px; padding: 20px 0;">Market close time has already passed today \u2014 nothing left to plot.</div>';
+    decayState = null;
+    slider.disabled = true;
+    return;
+  }
+  slider.disabled = false;
+
+  const totalMinutes = Math.round((closeDateTime - now)/60000);
+  const w = 1000, h = 300;
+  const padL = 60, padR = 20, padT = 30, padB = 34;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+
+  const pts = [];
+  let minPct = Infinity, maxPct = -Infinity;
+  const step = Math.max(1, Math.round(totalMinutes/200)); // cap resolution for very long windows
+  for(let m=0; m<=totalMinutes; m+=step){
+    const minutesLeft = totalMinutes - m;
+    const T = minutesLeft/(365*24*60);
+    const val = bsPrice(fixedS,K,T,r,sigma,type);
+    const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
+    const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
+    pts.push({ idx:m, pct, dollarPL: pl });
+    if(pct<minPct) minPct=pct;
+    if(pct>maxPct) maxPct=pct;
+  }
+  if(pts[pts.length-1].idx !== totalMinutes){
+    const T = 0;
+    const val = bsPrice(fixedS,K,T,r,sigma,type);
+    const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
+    const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
+    pts.push({ idx: totalMinutes, pct, dollarPL: pl });
+    if(pct<minPct) minPct=pct;
+    if(pct>maxPct) maxPct=pct;
+  }
+  if(minPct>0) minPct=0;
+  if(maxPct<0) maxPct=0;
+  const pad = (maxPct-minPct)*0.1 || 10;
+  minPct -= pad; maxPct += pad;
+
+  function xPix(m){ return padL + (m/Math.max(totalMinutes,1))*plotW; }
+  function yPix(p){ return padT + (1-(p-minPct)/(maxPct-minPct))*plotH; }
+  const zeroY = yPix(0);
+
+  let linePath = '';
+  pts.forEach((pt,i)=>{
+    const x = xPix(pt.idx), y = yPix(pt.pct);
+    linePath += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+  });
+  const firstX = xPix(0), lastX = xPix(totalMinutes);
+  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+zeroY.toFixed(1)+' L'+firstX.toFixed(1)+','+zeroY.toFixed(1)+' Z';
+  const endPct = pts[pts.length-1].pct;
+  const areaColor = endPct>=0 ? 'rgba(61,220,132,0.10)' : 'rgba(255,92,92,0.10)';
+
+  let gridLines = '';
+  const numGrid = 5;
+  for(let i=0;i<=numGrid;i++){
+    const val = minPct + (maxPct-minPct)*i/numGrid;
+    const y = yPix(val);
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#232B3D" stroke-width="1"/>`;
+    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7C8798">${val.toFixed(0)}%</text>`;
+  }
+
+  let xLabels = '';
+  const numX = Math.min(6, Math.max(totalMinutes,1));
+  for(let i=0;i<=numX;i++){
+    const mVal = Math.round(totalMinutes*i/numX);
+    const timeLabel = new Date(now.getTime()+mVal*60000);
+    const x = xPix(mVal);
+    const lbl = timeLabel.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+    xLabels += `<text x="${x.toFixed(1)}" y="${h-padB+18}" text-anchor="middle" font-size="10" fill="#7C8798">${lbl}</text>`;
+  }
+
+  const svg = `
+  <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    ${gridLines}
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#F0B429" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <path d="${areaPath}" fill="${areaColor}"/>
+    <path d="${linePath}" fill="none" stroke="#F0B429" stroke-width="2"/>
+    ${xLabels}
+    <g id="scrubMarker"></g>
+  </svg>`;
+  holder.innerHTML = svg;
+
+  decayState = { mode:'intraday', pts, xPix, yPix, padT, padB, h, baseTime: now };
+
+  slider.max = totalMinutes;
+  slider.step = step;
+  let sliderIdx = parseInt(slider.value, 10);
+  if(isNaN(sliderIdx) || sliderIdx > totalMinutes){
+    sliderIdx = 0;
+  }
+  slider.value = sliderIdx;
+  updateScrubMarker(sliderIdx);
+}
+
+function nearestPointIndex(pts, idx){
+  let best = 0, bestDiff = Infinity;
+  for(let i=0;i<pts.length;i++){
+    const diff = Math.abs(pts[i].idx - idx);
+    if(diff < bestDiff){ bestDiff = diff; best = i; }
+  }
+  return best;
+}
+
+function updateScrubMarker(idx){
   if(!decayState) return;
-  const { pts, xPix, yPix, padT, h, padB, today } = decayState;
-  day = Math.max(0, Math.min(day, pts.length-1));
-  const pt = pts[day];
-  const x = xPix(pt.day), y = yPix(pt.pct);
+  const { pts, xPix, yPix, padT, h, padB, baseTime, mode } = decayState;
+  const i = nearestPointIndex(pts, idx);
+  const pt = pts[i];
+  const x = xPix(pt.idx), y = yPix(pt.pct);
   const color = pt.pct>=0 ? '#3DDC84' : '#FF5C5C';
 
   const g = document.getElementById('scrubMarker');
@@ -907,19 +1048,27 @@ function updateScrubMarker(day){
     `;
   }
 
-  const dateLabel = new Date(today.getTime()+pt.day*24*60*60*1000);
-  const dateStr = dateLabel.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+  let labelStr;
+  if(mode==='intraday'){
+    const timeLabel = new Date(baseTime.getTime()+pt.idx*60000);
+    labelStr = timeLabel.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+  } else {
+    const dateLabel = new Date(baseTime.getTime()+pt.idx*24*60*60*1000);
+    labelStr = dateLabel.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+  }
   const pctStr = (pt.pct>=0?'+':'') + pt.pct.toFixed(1) + '%';
   const dollarStr = fmtMoney(pt.dollarPL);
   const cls = pt.pct>=0 ? 'pos' : 'neg';
 
   document.getElementById('sliderReadout').innerHTML =
-    `${dateStr} &nbsp; <span class="${cls}">${pctStr} (${dollarStr})</span>`;
+    `${labelStr} &nbsp; <span class="${cls}">${pctStr} (${dollarStr})</span>`;
 }
 
 document.getElementById('decaySlider').addEventListener('input', (e)=>{
   updateScrubMarker(parseInt(e.target.value,10));
 });
+
+document.getElementById('intradayCloseTime').addEventListener('input', calc);
 
 function exportTrades(){
   const trades = loadTrades();
@@ -1070,10 +1219,27 @@ function addManualTrade(){
   renderTradeTable();
 }
 
-function closeTrade(id){
+function positionKey(trade){
+  return [trade.ticker||'', trade.type, trade.strike, trade.expDate||'', trade.side].join('|');
+}
+
+function closeGroup(key){
   const trades = loadTrades();
-  const trade = trades.find(t=>t.id===id);
-  if(!trade) return;
+  const openLots = trades.filter(t=>t.status==='open' && positionKey(t)===key)
+                          .sort((a,b)=> (a.entryDate||'').localeCompare(b.entryDate||''));
+  const openQty = openLots.reduce((s,l)=>s+l.contracts,0);
+  if(openQty===0) return;
+
+  let qtyStr = openQty > 1
+    ? prompt('How many contracts are you closing? (max ' + openQty + ')', openQty)
+    : String(openQty);
+  if(qtyStr === null) return;
+  let qty = parseInt(qtyStr, 10);
+  if(isNaN(qty) || qty < 1 || qty > openQty){
+    alert('Enter a whole number between 1 and ' + openQty + '.');
+    return;
+  }
+
   const exitPx = prompt('Exit premium ($/share) you actually sold/bought back at:');
   if(exitPx === null || exitPx === '') return;
   const exitVal = parseFloat(exitPx);
@@ -1081,12 +1247,42 @@ function closeTrade(id){
   const exitDateStr = prompt('Exit date (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
   if(exitDateStr === null) return;
 
-  trade.status = 'closed';
-  trade.exitPremium = exitVal;
-  trade.exitDate = exitDateStr;
+  // Consume open lots oldest-first (FIFO) until qty is satisfied.
+  let remaining = qty;
+  for(const lot of openLots){
+    if(remaining<=0) break;
+    if(lot.contracts <= remaining){
+      remaining -= lot.contracts;
+      lot.status = 'closed';
+      lot.exitPremium = exitVal;
+      lot.exitDate = exitDateStr;
+    } else {
+      const closedPortion = {
+        ...lot,
+        id: 'trade_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+        contracts: remaining,
+        status: 'closed',
+        exitPremium: exitVal,
+        exitDate: exitDateStr
+      };
+      lot.contracts = lot.contracts - remaining;
+      trades.push(closedPortion);
+      remaining = 0;
+    }
+  }
+
   saveTrades(trades);
   renderTradeTable();
 }
+
+function deleteGroup(key){
+  if(!confirm('Delete this entire open position? This removes all open entries for this contract and cannot be undone.')) return;
+  let trades = loadTrades();
+  trades = trades.filter(t=> !(t.status==='open' && positionKey(t)===key));
+  saveTrades(trades);
+  renderTradeTable();
+}
+
 
 function reopenTrade(id){
   const trades = loadTrades();
@@ -1121,57 +1317,119 @@ function tradePL(trade){
   return { dollarPL, pct };
 }
 
+function buildUnifiedRows(trades){
+  const openGroups = {};
+  const rows = [];
+
+  trades.forEach(t=>{
+    if(t.status==='open'){
+      const key = positionKey(t);
+      if(!openGroups[key]){
+        openGroups[key] = { key, ticker:t.ticker||'--', type:t.type, strike:t.strike, expDate:t.expDate||'--', side:t.side, contracts:0, weightedEntry:0, latestEntryDate:t.entryDate||'' };
+      }
+      const g = openGroups[key];
+      g.contracts += t.contracts;
+      g.weightedEntry += t.entryPremium*t.contracts;
+      if((t.entryDate||'') > g.latestEntryDate) g.latestEntryDate = t.entryDate||'';
+    } else {
+      rows.push({ kind:'closed', trade:t, sortDate: t.exitDate || t.entryDate || '' });
+    }
+  });
+
+  Object.values(openGroups).forEach(g=>{
+    rows.push({
+      kind: 'open-group',
+      key: g.key,
+      ticker: g.ticker,
+      type: g.type,
+      side: g.side,
+      strike: g.strike,
+      expDate: g.expDate,
+      contracts: g.contracts,
+      avgEntry: g.contracts>0 ? g.weightedEntry/g.contracts : 0,
+      entryDate: g.latestEntryDate,
+      sortDate: g.latestEntryDate
+    });
+  });
+
+  rows.sort((a,b)=> (b.sortDate||'').localeCompare(a.sortDate||''));
+  return rows;
+}
+
+
 function renderTradeTable(){
-  const trades = loadTrades().sort((a,b)=> (b.entryDate||'').localeCompare(a.entryDate||''));
+  const trades = loadTrades();
+  const rows = buildUnifiedRows(trades);
   const tbody = document.getElementById('tradeTableBody');
   const noTrades = document.getElementById('noTrades');
   tbody.innerHTML = '';
 
-  if(trades.length===0){
+  if(rows.length===0){
     noTrades.style.display = '';
   } else {
     noTrades.style.display = 'none';
   }
 
-  let openCount = 0, closedCount = 0, realizedTotal = 0, wins = 0;
+  let openGroupCount = 0, closedCount = 0, realizedTotal = 0, wins = 0;
 
-  trades.forEach(trade=>{
-    const pl = tradePL(trade);
-    if(trade.status==='open') openCount++;
-    if(trade.status==='closed'){
+  rows.forEach(row=>{
+    const tr = document.createElement('tr');
+
+    if(row.kind==='open-group'){
+      openGroupCount++;
+      tr.innerHTML = `
+        <td>${row.ticker}</td>
+        <td>${row.type.toUpperCase()}</td>
+        <td>${row.side==='long'?'Long':'Short'}</td>
+        <td>$${row.strike.toFixed(2)}</td>
+        <td>${row.expDate}</td>
+        <td>${row.contracts}</td>
+        <td>$${row.avgEntry.toFixed(2)}</td>
+        <td>${row.entryDate || '--'}</td>
+        <td><span class="status-pill open">OPEN</span></td>
+        <td>--</td>
+        <td>--</td>
+        <td>--</td>
+        <td>--</td>
+        <td>
+          <button class="row-btn" onclick="closeGroup('${row.key}')">Close</button>
+          <button class="row-btn" onclick="deleteGroup('${row.key}')">Delete</button>
+        </td>
+      `;
+    } else {
+      const trade = row.trade;
+      const pl = tradePL(trade);
       closedCount++;
       if(pl){ realizedTotal += pl.dollarPL; if(pl.dollarPL>0) wins++; }
+      const plDollarStr = pl ? fmtMoney(pl.dollarPL) : '--';
+      const plPctStr = pl ? (pl.pct>=0?'+':'')+pl.pct.toFixed(1)+'%' : '--';
+      const plClass = pl ? (pl.dollarPL>=0 ? 'pl-pos':'pl-neg') : '';
+
+      tr.innerHTML = `
+        <td>${trade.ticker || '--'}</td>
+        <td>${trade.type.toUpperCase()}</td>
+        <td>${trade.side==='long'?'Long':'Short'}</td>
+        <td>$${trade.strike.toFixed(2)}</td>
+        <td>${trade.expDate || '--'}</td>
+        <td>${trade.contracts}</td>
+        <td>$${trade.entryPremium.toFixed(2)}</td>
+        <td>${trade.entryDate || '--'}</td>
+        <td><span class="status-pill closed">CLOSED</span></td>
+        <td>${trade.exitPremium!==null ? '$'+trade.exitPremium.toFixed(2) : '--'}</td>
+        <td>${trade.exitDate || '--'}</td>
+        <td class="${plClass}">${plDollarStr}</td>
+        <td class="${plClass}">${plPctStr}</td>
+        <td>
+          <button class="row-btn" onclick="reopenTrade('${trade.id}')">Reopen</button>
+          <button class="row-btn" onclick="deleteTrade('${trade.id}')">Delete</button>
+        </td>
+      `;
     }
 
-    const tr = document.createElement('tr');
-    const plDollarStr = pl ? fmtMoney(pl.dollarPL) : '--';
-    const plPctStr = pl ? (pl.pct>=0?'+':'')+pl.pct.toFixed(1)+'%' : '--';
-    const plClass = pl ? (pl.dollarPL>=0 ? 'pl-pos':'pl-neg') : '';
-
-    tr.innerHTML = `
-      <td>${trade.ticker || '--'}</td>
-      <td>${trade.type.toUpperCase()}</td>
-      <td>${trade.side==='long'?'Long':'Short'}</td>
-      <td>$${trade.strike.toFixed(2)}</td>
-      <td>${trade.contracts}</td>
-      <td>$${trade.entryPremium.toFixed(2)}</td>
-      <td>${trade.entryDate || '--'}</td>
-      <td><span class="status-pill ${trade.status}">${trade.status.toUpperCase()}</span></td>
-      <td>${trade.exitPremium!==null ? '$'+trade.exitPremium.toFixed(2) : '--'}</td>
-      <td>${trade.exitDate || '--'}</td>
-      <td class="${plClass}">${plDollarStr}</td>
-      <td class="${plClass}">${plPctStr}</td>
-      <td>
-        ${trade.status==='open'
-          ? `<button class="row-btn" onclick="closeTrade('${trade.id}')">Close</button>`
-          : `<button class="row-btn" onclick="reopenTrade('${trade.id}')">Reopen</button>`}
-        <button class="row-btn" onclick="deleteTrade('${trade.id}')">Delete</button>
-      </td>
-    `;
     tbody.appendChild(tr);
   });
 
-  document.getElementById('sumOpen').textContent = openCount;
+  document.getElementById('sumOpen').textContent = openGroupCount;
   document.getElementById('sumClosed').textContent = closedCount;
   const realizedEl = document.getElementById('sumRealized');
   realizedEl.textContent = fmtMoney(realizedTotal);

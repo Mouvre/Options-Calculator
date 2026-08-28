@@ -613,6 +613,45 @@ svg text{ font-family: var(--font-mono); }
   padding: 7px 0;
 }
 
+.pagination-row{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.pagination-info{
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.pagination-controls{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.pagination-pagelabel{
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.pagination-controls .row-btn:disabled{
+  opacity: 0.4;
+  cursor: default;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+.pagination-controls .row-btn:disabled:hover{
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+
 .trades-header{
   display:flex;
   justify-content: space-between;
@@ -847,7 +886,16 @@ svg text{ font-family: var(--font-mono); }
           <button class="filter-tab" id="filterOpen" onclick="setStatusFilter('open')">Open</button>
           <button class="filter-tab" id="filterClosed" onclick="setStatusFilter('closed')">Closed</button>
         </div>
-        <input type="text" id="tickerSearch" class="ticker-search" placeholder="Search ticker..." oninput="renderTradeTable()">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="pageSizeSelect" class="ticker-search" style="width:auto;" onchange="onPageSizeChange()">
+            <option value="10">10 / page</option>
+            <option value="25">25 / page</option>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+            <option value="all">Show all</option>
+          </select>
+          <input type="text" id="tickerSearch" class="ticker-search" placeholder="Search ticker..." oninput="onSearchInput()">
+        </div>
       </div>
 
       <div class="table-scroll">
@@ -875,6 +923,15 @@ svg text{ font-family: var(--font-mono); }
       </div>
       <div class="trade-cards" id="tradeCards"></div>
       <div id="noTrades" style="display:none; color:#7C8798; font-size:12px; padding:16px 0;">No trades logged yet. Use "+ Log This Trade" on the Calculator tab, or add one manually above.</div>
+
+      <div class="pagination-row" id="paginationRow" style="display:none;">
+        <div class="pagination-info" id="paginationInfo"></div>
+        <div class="pagination-controls">
+          <button class="row-btn" id="pagePrevBtn" onclick="goToPage(currentPage-1)">‹ Prev</button>
+          <span class="pagination-pagelabel" id="pagePageLabel"></span>
+          <button class="row-btn" id="pageNextBtn" onclick="goToPage(currentPage+1)">Next ›</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1579,9 +1636,12 @@ function buildUnifiedRows(trades){
 
 let statusFilter = 'all';
 let sortState = { key: null, dir: 1 };
+let pageSize = 10;
+let currentPage = 1;
 
 function setStatusFilter(f){
   statusFilter = f;
+  currentPage = 1;
   ['All','Open','Closed'].forEach(label=>{
     document.getElementById('filter'+label).classList.toggle('active', label.toLowerCase()===f);
   });
@@ -1595,6 +1655,24 @@ function setSort(key){
     sortState.key = key;
     sortState.dir = 1;
   }
+  currentPage = 1;
+  renderTradeTable();
+}
+
+function onSearchInput(){
+  currentPage = 1;
+  renderTradeTable();
+}
+
+function onPageSizeChange(){
+  const val = document.getElementById('pageSizeSelect').value;
+  pageSize = val==='all' ? 'all' : parseInt(val,10);
+  currentPage = 1;
+  renderTradeTable();
+}
+
+function goToPage(p){
+  currentPage = p;
   renderTradeTable();
 }
 
@@ -1702,6 +1780,28 @@ function renderTradeTable(){
     noTrades.style.display = 'none';
   }
 
+  // Pagination: slice the filtered+sorted rows for the current page
+  const totalFiltered = rows.length;
+  const effectivePageSize = pageSize==='all' ? Math.max(totalFiltered,1) : pageSize;
+  const pageCount = pageSize==='all' ? 1 : Math.max(1, Math.ceil(totalFiltered/effectivePageSize));
+  if(currentPage > pageCount) currentPage = pageCount;
+  if(currentPage < 1) currentPage = 1;
+  const startIdx = (currentPage-1)*effectivePageSize;
+  const pageRows = pageSize==='all' ? rows : rows.slice(startIdx, startIdx+effectivePageSize);
+
+  const paginationRow = document.getElementById('paginationRow');
+  if(totalFiltered===0 || pageSize==='all'){
+    paginationRow.style.display = 'none';
+  } else {
+    paginationRow.style.display = 'flex';
+    const rangeStart = startIdx+1;
+    const rangeEnd = Math.min(startIdx+effectivePageSize, totalFiltered);
+    document.getElementById('paginationInfo').textContent = `Showing ${rangeStart}\u2013${rangeEnd} of ${totalFiltered}`;
+    document.getElementById('pagePageLabel').textContent = `Page ${currentPage} of ${pageCount}`;
+    document.getElementById('pagePrevBtn').disabled = currentPage<=1;
+    document.getElementById('pageNextBtn').disabled = currentPage>=pageCount;
+  }
+
   // Summary stats always reflect ALL trades, not the current filter/search
   const allRows = buildUnifiedRows(trades);
   let openGroupCount = 0, closedCount = 0, realizedTotal = 0, wins = 0;
@@ -1712,7 +1812,7 @@ function renderTradeTable(){
     if(pl){ realizedTotal += pl.dollarPL; if(pl.dollarPL>0) wins++; }
   });
 
-  rows.forEach(row=>{
+  pageRows.forEach(row=>{
     const tr = document.createElement('tr');
     const typePill = `<span class="pill pill-${row.kind==='open-group'?row.type:row.trade.type}">${(row.kind==='open-group'?row.type:row.trade.type).toUpperCase()}</span>`;
     const sideVal = row.kind==='open-group' ? row.side : row.trade.side;

@@ -343,6 +343,113 @@ svg text{ font-family: var(--font-mono); }
   border: 1px solid var(--line);
 }
 
+.calendar-header{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.calendar-nav{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.calendar-month-label{
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 130px;
+  text-align:center;
+}
+
+.calendar-month-summary{
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+
+.calendar-month-summary .pl-pos{ font-weight:600; }
+.calendar-month-summary .pl-neg{ font-weight:600; }
+
+.calendar-weekdays{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.calendar-weekdays div{
+  text-align:center;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.calendar-grid{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-day{
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-height: 64px;
+  padding: 6px;
+  display:flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.calendar-day.empty{
+  background: transparent;
+  border: none;
+}
+
+.calendar-day.today{
+  border-color: var(--amber);
+}
+
+.calendar-day.day-win{
+  background: rgba(61,220,132,0.10);
+  border-color: rgba(61,220,132,0.35);
+}
+
+.calendar-day.day-loss{
+  background: rgba(255,92,92,0.10);
+  border-color: rgba(255,92,92,0.35);
+}
+
+.calendar-day-num{
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.calendar-day-pl{
+  font-size: 12px;
+  font-weight: 700;
+  text-align:right;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-day-count{
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align:right;
+}
+
+@media (max-width: 560px){
+  .calendar-day{ min-height: 48px; padding: 4px; }
+  .calendar-day-pl{ font-size: 10px; }
+  .calendar-weekdays div{ font-size: 9px; }
+}
+
 .log-form-grid{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
@@ -818,6 +925,23 @@ svg text{ font-family: var(--font-mono); }
         <div class="stat-label">Win rate</div>
         <div class="stat-value" id="sumWinRate">--</div>
       </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="calendar-header">
+        <h2 style="margin:0;">P&amp;L Calendar</h2>
+        <div class="calendar-nav">
+          <button class="row-btn" onclick="shiftCalendarMonth(-1)">&lsaquo; Prev</button>
+          <span class="calendar-month-label" id="calendarMonthLabel"></span>
+          <button class="row-btn" onclick="shiftCalendarMonth(1)">Next &rsaquo;</button>
+          <button class="row-btn" onclick="goToCurrentCalendarMonth()">Today</button>
+        </div>
+      </div>
+      <div class="calendar-month-summary" id="calendarMonthSummary"></div>
+      <div class="calendar-weekdays">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
     </div>
 
     <div class="panel" style="margin-bottom:20px;">
@@ -1419,6 +1543,89 @@ function showTab(tab){
     btnCalc.classList.remove('active');
     btnLog.classList.add('active');
     renderTradeTable();
+    renderCalendar();
+  }
+}
+
+let calendarMonth = new Date(); // any date within the currently viewed month
+
+function shiftCalendarMonth(delta){
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth()+delta, 1);
+  renderCalendar();
+}
+
+function goToCurrentCalendarMonth(){
+  calendarMonth = new Date();
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const trades = loadTrades();
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+
+  document.getElementById('calendarMonthLabel').textContent =
+    calendarMonth.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+
+  // Aggregate realized $ P&L and trade count by exit date (YYYY-MM-DD)
+  const dayTotals = {};
+  trades.forEach(t=>{
+    if(t.status!=='closed' || !t.exitDate) return;
+    const pl = tradePL(t);
+    if(!pl) return;
+    if(!dayTotals[t.exitDate]) dayTotals[t.exitDate] = { pl:0, count:0 };
+    dayTotals[t.exitDate].pl += pl.dollarPL;
+    dayTotals[t.exitDate].count += 1;
+  });
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+
+  const todayStr = new Date().toISOString().slice(0,10);
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+
+  for(let i=0;i<startWeekday;i++){
+    const filler = document.createElement('div');
+    filler.className = 'calendar-day empty';
+    grid.appendChild(filler);
+  }
+
+  let monthTotal = 0, monthTradeCount = 0, winDays = 0, lossDays = 0;
+
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const info = dayTotals[dateStr];
+    const cell = document.createElement('div');
+    cell.className = 'calendar-day';
+    if(dateStr===todayStr) cell.classList.add('today');
+
+    let plHtml = '';
+    let countHtml = '';
+    if(info){
+      monthTotal += info.pl;
+      monthTradeCount += info.count;
+      if(info.pl>=0) winDays++; else lossDays++;
+      cell.classList.add(info.pl>=0 ? 'day-win' : 'day-loss');
+      plHtml = `<div class="calendar-day-pl ${info.pl>=0?'pl-pos':'pl-neg'}">${fmtMoney(info.pl)}</div>`;
+      countHtml = `<div class="calendar-day-count">${info.count} trade${info.count>1?'s':''}</div>`;
+    }
+
+    cell.innerHTML = `
+      <div class="calendar-day-num">${d}</div>
+      ${plHtml}
+      ${countHtml}
+    `;
+    grid.appendChild(cell);
+  }
+
+  const summaryEl = document.getElementById('calendarMonthSummary');
+  if(monthTradeCount===0){
+    summaryEl.textContent = 'No closed trades this month.';
+  } else {
+    const cls = monthTotal>=0 ? 'pl-pos' : 'pl-neg';
+    summaryEl.innerHTML = `Month total: <span class="${cls}">${fmtMoney(monthTotal)}</span> across ${monthTradeCount} trade${monthTradeCount>1?'s':''} &middot; ${winDays} winning day${winDays!==1?'s':''}, ${lossDays} losing day${lossDays!==1?'s':''}`;
   }
 }
 
@@ -1443,6 +1650,7 @@ function saveTrades(trades){
 
 function logCurrentTrade(){
   const trades = loadTrades();
+  const now = new Date();
   const trade = {
     id: 'trade_' + Date.now(),
     ticker: (document.getElementById('ticker').value || '').toUpperCase(),
@@ -1451,7 +1659,7 @@ function logCurrentTrade(){
     strike: parseFloat(document.getElementById('strike').value)||0,
     contracts: parseFloat(document.getElementById('contracts').value)||0,
     entryPremium: parseFloat(document.getElementById('premium').value)||0,
-    entryDate: new Date().toISOString().slice(0,10),
+    entryDate: now.toISOString().slice(0,10),
     expDate: document.getElementById('expDate').value,
     notes: '',
     status: 'open',
@@ -1736,6 +1944,7 @@ function updateSortArrows(){
 }
 
 function renderTradeTable(){
+  renderCalendar();
   const trades = loadTrades();
   let rows = buildUnifiedRows(trades);
 

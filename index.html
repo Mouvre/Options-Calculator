@@ -377,7 +377,7 @@ svg text{ font-family: var(--font-mono); }
 
 .calendar-weekdays{
   display:grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) 90px;
   gap: 6px;
   margin-bottom: 6px;
 }
@@ -392,7 +392,7 @@ svg text{ font-family: var(--font-mono); }
 
 .calendar-grid{
   display:grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) 90px;
   gap: 6px;
 }
 
@@ -426,6 +426,18 @@ svg text{ font-family: var(--font-mono); }
   border-color: rgba(255,92,92,0.35);
 }
 
+.calendar-day.day-flat{
+  background: rgba(77,163,255,0.10);
+  border-color: rgba(77,163,255,0.35);
+}
+
+.calendar-day.clickable{
+  cursor: pointer;
+}
+.calendar-day.clickable:hover{
+  border-color: var(--amber);
+}
+
 .calendar-day-num{
   font-size: 11px;
   color: var(--text-dim);
@@ -444,10 +456,47 @@ svg text{ font-family: var(--font-mono); }
   text-align:right;
 }
 
+.calendar-week-summary{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--amber);
+  border-radius: 4px;
+  min-height: 64px;
+  padding: 6px 8px;
+  display:flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.calendar-week-summary .week-label{
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.calendar-week-summary .week-pl{
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-week-summary .week-count{
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
 @media (max-width: 560px){
   .calendar-day{ min-height: 48px; padding: 4px; }
   .calendar-day-pl{ font-size: 10px; }
   .calendar-weekdays div{ font-size: 9px; }
+  .calendar-weekdays{ grid-template-columns: repeat(7, 1fr) 56px; }
+  .calendar-grid{ grid-template-columns: repeat(7, 1fr) 56px; }
+  .calendar-week-summary{ min-height: 48px; padding: 4px; }
+  .calendar-week-summary .week-pl{ font-size: 10px; }
+  .calendar-week-summary .week-label{ display:none; }
 }
 
 .log-form-grid{
@@ -572,6 +621,7 @@ svg text{ font-family: var(--font-mono); }
 
 .pl-pos{ color: var(--green); }
 .pl-neg{ color: var(--red); }
+.pl-flat{ color: var(--blue); }
 
 .filter-bar{
   display:flex;
@@ -617,6 +667,30 @@ svg text{ font-family: var(--font-mono); }
   width: 180px;
 }
 .ticker-search:focus{ border-color: var(--amber); }
+
+.date-filter-chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  background: rgba(240,180,41,0.10);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.date-filter-chip button{
+  background: none;
+  border: none;
+  color: var(--amber);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+}
 
 .row-btn{
   background: transparent;
@@ -939,7 +1013,7 @@ svg text{ font-family: var(--font-mono); }
       </div>
       <div class="calendar-month-summary" id="calendarMonthSummary"></div>
       <div class="calendar-weekdays">
-        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Week</div>
       </div>
       <div class="calendar-grid" id="calendarGrid"></div>
     </div>
@@ -1021,8 +1095,9 @@ svg text{ font-family: var(--font-mono); }
           <input type="text" id="tickerSearch" class="ticker-search" placeholder="Search ticker..." oninput="onSearchInput()">
         </div>
       </div>
+      <div id="dateFilterChip" style="display:none; margin:-8px 0 14px 0;"></div>
 
-      <div class="table-scroll">
+      <div class="table-scroll" id="tradesTableScrollAnchor">
         <table class="trade-table" id="tradeTable">
           <thead>
             <tr>
@@ -1559,6 +1634,12 @@ function goToCurrentCalendarMonth(){
   renderCalendar();
 }
 
+function plClassFor(val){
+  if(val>0) return 'pl-pos';
+  if(val<0) return 'pl-neg';
+  return 'pl-flat';
+}
+
 function renderCalendar(){
   const trades = loadTrades();
   const year = calendarMonth.getFullYear();
@@ -1581,43 +1662,76 @@ function renderCalendar(){
   const firstOfMonth = new Date(year, month, 1);
   const startWeekday = firstOfMonth.getDay(); // 0=Sun
   const daysInMonth = new Date(year, month+1, 0).getDate();
-
   const todayStr = new Date().toISOString().slice(0,10);
+
+  // Build a flat list of day-slots (nulls for empty leading/trailing cells)
+  const slots = [];
+  for(let i=0;i<startWeekday;i++) slots.push(null);
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    slots.push({ day:d, dateStr, info: dayTotals[dateStr] || null });
+  }
+  while(slots.length % 7 !== 0) slots.push(null);
+
   const grid = document.getElementById('calendarGrid');
   grid.innerHTML = '';
 
-  for(let i=0;i<startWeekday;i++){
-    const filler = document.createElement('div');
-    filler.className = 'calendar-day empty';
-    grid.appendChild(filler);
-  }
+  let monthTotal = 0, monthTradeCount = 0, winDays = 0, lossDays = 0, flatDays = 0;
 
-  let monthTotal = 0, monthTradeCount = 0, winDays = 0, lossDays = 0;
+  for(let w=0; w<slots.length/7; w++){
+    const weekSlots = slots.slice(w*7, w*7+7);
+    let weekPL = 0, weekCount = 0;
 
-  for(let d=1; d<=daysInMonth; d++){
-    const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-    const info = dayTotals[dateStr];
-    const cell = document.createElement('div');
-    cell.className = 'calendar-day';
-    if(dateStr===todayStr) cell.classList.add('today');
+    weekSlots.forEach(slot=>{
+      const cell = document.createElement('div');
+      if(!slot){
+        cell.className = 'calendar-day empty';
+        cell.innerHTML = '';
+        grid.appendChild(cell);
+        return;
+      }
+      cell.className = 'calendar-day';
+      if(slot.dateStr===todayStr) cell.classList.add('today');
 
-    let plHtml = '';
-    let countHtml = '';
-    if(info){
-      monthTotal += info.pl;
-      monthTradeCount += info.count;
-      if(info.pl>=0) winDays++; else lossDays++;
-      cell.classList.add(info.pl>=0 ? 'day-win' : 'day-loss');
-      plHtml = `<div class="calendar-day-pl ${info.pl>=0?'pl-pos':'pl-neg'}">${fmtMoney(info.pl)}</div>`;
-      countHtml = `<div class="calendar-day-count">${info.count} trade${info.count>1?'s':''}</div>`;
+      let plHtml = '', countHtml = '';
+      if(slot.info){
+        monthTotal += slot.info.pl;
+        monthTradeCount += slot.info.count;
+        weekPL += slot.info.pl;
+        weekCount += slot.info.count;
+        if(slot.info.pl>0) winDays++;
+        else if(slot.info.pl<0) lossDays++;
+        else flatDays++;
+
+        const dayCls = slot.info.pl>0 ? 'day-win' : (slot.info.pl<0 ? 'day-loss' : 'day-flat');
+        cell.classList.add(dayCls, 'clickable');
+        cell.onclick = () => filterByDate(slot.dateStr);
+        plHtml = `<div class="calendar-day-pl ${plClassFor(slot.info.pl)}">${fmtMoney(slot.info.pl)}</div>`;
+        countHtml = `<div class="calendar-day-count">${slot.info.count} trade${slot.info.count>1?'s':''}</div>`;
+      }
+
+      cell.innerHTML = `
+        <div class="calendar-day-num">${slot.day}</div>
+        ${plHtml}
+        ${countHtml}
+      `;
+      grid.appendChild(cell);
+    });
+
+    // Weekly summary cell at the end of the row
+    const weekCell = document.createElement('div');
+    weekCell.className = 'calendar-week-summary';
+    if(weekCount>0){
+      const cls = plClassFor(weekPL);
+      weekCell.innerHTML = `
+        <div class="week-label">Week</div>
+        <div class="week-pl ${cls}">${fmtMoney(weekPL)}</div>
+        <div class="week-count">${weekCount} trade${weekCount>1?'s':''}</div>
+      `;
+    } else {
+      weekCell.innerHTML = `<div class="week-label">Week</div><div class="week-count">--</div>`;
     }
-
-    cell.innerHTML = `
-      <div class="calendar-day-num">${d}</div>
-      ${plHtml}
-      ${countHtml}
-    `;
-    grid.appendChild(cell);
+    grid.appendChild(weekCell);
   }
 
   const summaryEl = document.getElementById('calendarMonthSummary');
@@ -1625,7 +1739,7 @@ function renderCalendar(){
     summaryEl.textContent = 'No closed trades this month.';
   } else {
     const cls = monthTotal>=0 ? 'pl-pos' : 'pl-neg';
-    summaryEl.innerHTML = `Month total: <span class="${cls}">${fmtMoney(monthTotal)}</span> across ${monthTradeCount} trade${monthTradeCount>1?'s':''} &middot; ${winDays} winning day${winDays!==1?'s':''}, ${lossDays} losing day${lossDays!==1?'s':''}`;
+    summaryEl.innerHTML = `Month total: <span class="${cls}">${fmtMoney(monthTotal)}</span> across ${monthTradeCount} trade${monthTradeCount>1?'s':''} &middot; ${winDays} winning day${winDays!==1?'s':''}, ${lossDays} losing day${lossDays!==1?'s':''}${flatDays>0 ? ', ' + flatDays + ' flat day' + (flatDays!==1?'s':'') : ''}`;
   }
 }
 
@@ -1846,6 +1960,7 @@ let statusFilter = 'all';
 let sortState = { key: null, dir: 1 };
 let pageSize = 10;
 let currentPage = 1;
+let dateFilter = null;
 
 function setStatusFilter(f){
   statusFilter = f;
@@ -1853,6 +1968,24 @@ function setStatusFilter(f){
   ['All','Open','Closed'].forEach(label=>{
     document.getElementById('filter'+label).classList.toggle('active', label.toLowerCase()===f);
   });
+  renderTradeTable();
+}
+
+function filterByDate(dateStr){
+  dateFilter = dateStr;
+  statusFilter = 'closed';
+  currentPage = 1;
+  ['All','Open','Closed'].forEach(label=>{
+    document.getElementById('filter'+label).classList.toggle('active', label.toLowerCase()==='closed');
+  });
+  renderTradeTable();
+  const anchor = document.getElementById('tradesTableScrollAnchor');
+  if(anchor) anchor.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function clearDateFilter(){
+  dateFilter = null;
+  currentPage = 1;
   renderTradeTable();
 }
 
@@ -1962,6 +2095,20 @@ function renderTradeTable(){
       const ticker = r.kind==='open-group' ? (r.ticker||'') : (r.trade.ticker||'');
       return ticker.toUpperCase().includes(searchVal);
     });
+  }
+
+  // Date filter (from clicking a calendar day) \u2014 only closed trades have an exit date
+  if(dateFilter){
+    rows = rows.filter(r=> r.kind==='closed' && r.trade.exitDate===dateFilter);
+  }
+
+  const chipHolder = document.getElementById('dateFilterChip');
+  if(dateFilter){
+    chipHolder.style.display = '';
+    chipHolder.innerHTML = `<span class="date-filter-chip">Showing trades closed on ${dateFilter} <button onclick="clearDateFilter()">&times;</button></span>`;
+  } else {
+    chipHolder.style.display = 'none';
+    chipHolder.innerHTML = '';
   }
 
   // Sort

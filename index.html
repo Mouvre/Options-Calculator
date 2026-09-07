@@ -755,6 +755,19 @@ svg text{ font-family: var(--font-mono); }
   background: rgba(255,255,255,0.015);
 }
 
+.row-clickable{
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.trade-table tbody tr.row-clickable:hover{
+  background: rgba(240,180,41,0.06) !important;
+}
+
+.trade-card.row-clickable:hover{
+  border-color: var(--amber);
+}
+
 .trade-table tbody tr.row-win{
   background: rgba(61,220,132,0.045);
 }
@@ -2824,9 +2837,10 @@ function renderTradeTable(){
       const plClass = plClassFor(row.dollarPL);
       const arrow = `<span class="expand-arrow${isExpanded?' open':''}">${ICONS.chevronRight}</span>`;
 
-      tr.classList.add(row.dollarPL>=0 ? 'row-win' : 'row-loss');
+      tr.classList.add(row.dollarPL>=0 ? 'row-win' : 'row-loss', 'row-clickable');
+      tr.onclick = () => toggleGroupExpand(row.key);
       tr.innerHTML = `
-        <td><button class="expand-toggle" onclick="toggleGroupExpand('${row.key}')">${arrow}</button> ${tickerChip}</td>
+        <td><span class="expand-toggle">${arrow}</span> ${tickerChip}</td>
         <td>${typePill}</td>
         <td>${sidePill}</td>
         <td class="num">${fmtMoney(row.strike)}</td>
@@ -2840,8 +2854,7 @@ function renderTradeTable(){
         <td class="num ${plClass}">${fmtMoney(row.dollarPL)}</td>
         <td class="num ${plClass}">${(row.pctPL>=0?'+':'')+row.pctPL.toFixed(1)}%</td>
         <td>
-          <button class="row-btn" onclick="toggleGroupExpand('${row.key}')">${isExpanded?'Collapse':'Expand'}</button>
-          <button class="row-btn" onclick="deleteClosedGroup('${row.key}')">Delete</button>
+          <button class="row-btn" onclick="event.stopPropagation(); deleteClosedGroup('${row.key}')">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -2876,7 +2889,8 @@ function renderTradeTable(){
       }
 
       const card = document.createElement('div');
-      card.className = 'trade-card' + (row.dollarPL>=0 ? ' row-win' : ' row-loss');
+      card.className = 'trade-card row-clickable' + (row.dollarPL>=0 ? ' row-win' : ' row-loss');
+      card.onclick = () => toggleGroupExpand(row.key);
       let lotsHtml = '';
       if(isExpanded){
         lotsHtml = '<div class="card-lots">' + row.lots.map(lot=>{
@@ -2892,7 +2906,7 @@ function renderTradeTable(){
       card.innerHTML = `
         <div class="trade-card-header">
           <div class="trade-card-header-left">
-            ${tickerChip} ${typePill} ${sidePill}
+            <span class="expand-toggle">${arrow}</span> ${tickerChip} ${typePill} ${sidePill}
           </div>
           <span class="status-pill closed">CLOSED</span>
         </div>
@@ -2911,8 +2925,7 @@ function renderTradeTable(){
         </div>
         ${lotsHtml}
         <div class="trade-card-actions">
-          <button class="row-btn" onclick="toggleGroupExpand('${row.key}')">${isExpanded?'Collapse fills':'Show '+row.lots.length+' fills'}</button>
-          <button class="row-btn" onclick="deleteClosedGroup('${row.key}')">Delete</button>
+          <button class="row-btn" onclick="event.stopPropagation(); deleteClosedGroup('${row.key}')">Delete</button>
         </div>
       `;
       cardsHolder.appendChild(card);

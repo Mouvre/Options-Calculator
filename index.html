@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Options P&L Terminal</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B0E14'/%3E%3Cline x1='9' y1='6' x2='9' y2='12' stroke='%233DDC84' stroke-width='2'/%3E%3Crect x='6.5' y='12' width='5' height='10' rx='1' fill='%233DDC84'/%3E%3Cline x1='9' y1='22' x2='9' y2='26' stroke='%233DDC84' stroke-width='2'/%3E%3Cline x1='23' y1='6' x2='23' y2='10' stroke='%23FF5C5C' stroke-width='2'/%3E%3Crect x='20.5' y='10' width='5' height='9' rx='1' fill='%23FF5C5C'/%3E%3Cline x1='23' y1='19' x2='23' y2='26' stroke='%23FF5C5C' stroke-width='2'/%3E%3C/svg%3E">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
@@ -24,9 +25,33 @@
 
 *{ box-sizing: border-box; }
 
+::-webkit-scrollbar{
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track{
+  background: var(--panel);
+}
+::-webkit-scrollbar-thumb{
+  background: var(--line);
+  border-radius: 5px;
+  border: 2px solid var(--panel);
+}
+::-webkit-scrollbar-thumb:hover{
+  background: var(--text-dim);
+}
+*{
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--panel);
+}
+
 body{
   margin:0;
-  background: var(--bg);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(240,180,41,0.05), transparent),
+    radial-gradient(ellipse 900px 500px at 90% 10%, rgba(61,220,132,0.04), transparent),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-mono);
   padding: 32px 20px;
@@ -46,6 +71,18 @@ body{
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.masthead-title{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.brand-mark{
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
 }
 
 .masthead h1{
@@ -82,6 +119,7 @@ body{
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 20px;
+  transition: border-color 0.15s ease;
 }
 
 .panel h2{
@@ -115,10 +153,16 @@ body{
   padding: 9px 10px;
   border-radius: 4px;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .field input:focus, .field select:focus{
   border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(240,180,41,0.12);
+}
+
+.field input:hover, .field select:hover{
+  border-color: var(--text-dim);
 }
 
 .quick-preset-row{
@@ -150,6 +194,7 @@ body{
   border-radius: 4px;
   cursor: pointer;
   letter-spacing: 0.04em;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .toggle-btn.active[data-kind="call"]{ background: rgba(61,220,132,0.12); border-color: var(--green); color: var(--green); }
@@ -315,6 +360,12 @@ svg text{ font-family: var(--font-mono); }
   padding: 9px 18px;
   border-radius: 4px;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tab-btn:hover:not(.active){
+  border-color: var(--text-dim);
+  color: var(--text);
 }
 
 .tab-btn.active{
@@ -334,9 +385,11 @@ svg text{ font-family: var(--font-mono); }
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
 
-.log-trade-btn:hover{ background: rgba(240,180,41,0.10); }
+.log-trade-btn:hover{ background: rgba(240,180,41,0.10); transform: translateY(-1px); }
+.log-trade-btn:active{ transform: translateY(0); }
 
 .summary-strip{
   display:grid;
@@ -572,6 +625,24 @@ svg text{ font-family: var(--font-mono); }
   .calendar-grid{ grid-template-columns: repeat(7, 1fr) 54px; }
 }
 
+.collapsible-header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-arrow{
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: transform 0.15s ease;
+}
+
+.collapsible-arrow.open{
+  transform: rotate(90deg);
+}
+
 .log-form-grid{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
@@ -594,7 +665,11 @@ svg text{ font-family: var(--font-mono); }
   border-radius: 4px;
   cursor: pointer;
   margin-top: 6px;
+  transition: filter 0.15s ease, transform 0.1s ease;
 }
+
+.add-trade-btn:hover{ filter: brightness(1.1); transform: translateY(-1px); }
+.add-trade-btn:active{ transform: translateY(0); }
 
 .table-scroll{
   overflow: auto;
@@ -783,8 +858,9 @@ svg text{ font-family: var(--font-mono); }
   border-radius: 3px;
   cursor: pointer;
   margin-right: 4px;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
-.row-btn:hover{ border-color: var(--amber); color: var(--amber); }
+.row-btn:hover{ border-color: var(--amber); color: var(--amber); background: rgba(240,180,41,0.06); }
 
 .expand-toggle{
   background: none;
@@ -987,7 +1063,18 @@ svg text{ font-family: var(--font-mono); }
 <div class="wrap">
 
   <div class="masthead">
-    <h1>OPTIONS <span>P&amp;L</span> TERMINAL</h1>
+    <div class="masthead-title">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="7" fill="var(--panel-2)" stroke="var(--line)"/>
+        <line x1="10" y1="7" x2="10" y2="12" stroke="var(--green)" stroke-width="2" stroke-linecap="round"/>
+        <rect x="7.5" y="12" width="5" height="9" rx="1" fill="var(--green)"/>
+        <line x1="10" y1="21" x2="10" y2="25" stroke="var(--green)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="22" y1="7" x2="22" y2="10" stroke="var(--red)" stroke-width="2" stroke-linecap="round"/>
+        <rect x="19.5" y="10" width="5" height="8" rx="1" fill="var(--red)"/>
+        <line x1="22" y1="18" x2="22" y2="25" stroke="var(--red)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h1>OPTIONS <span>P&amp;L</span> TERMINAL</h1>
+    </div>
     <div class="ticker-tag">Theoretical exit &middot; Black-Scholes model</div>
   </div>
 
@@ -1164,7 +1251,11 @@ svg text{ font-family: var(--font-mono); }
     </div>
 
     <div class="panel" style="margin-bottom:20px;">
-      <h2>Add a trade manually</h2>
+      <div class="collapsible-header" onclick="toggleManualEntry()">
+        <h2 style="margin:0;">Add a trade manually</h2>
+        <span class="collapsible-arrow" id="manualEntryArrow">&#9656;</span>
+      </div>
+      <div id="manualEntryBody" style="display:none;">
       <div class="log-form-grid">
         <div class="field">
           <label>Ticker</label>
@@ -1210,6 +1301,7 @@ svg text{ font-family: var(--font-mono); }
         </div>
       </div>
       <button class="add-trade-btn" onclick="addManualTrade()">Add Trade</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -1218,7 +1310,7 @@ svg text{ font-family: var(--font-mono); }
         <div class="trades-header-actions">
           <button class="row-btn" onclick="exportTrades()">Export</button>
           <button class="row-btn" onclick="document.getElementById('importFileInput').click()">Import</button>
-          <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="handleImportFile(event)">
+          <input type="file" id="importFileInput" accept=".json,application/json" style="display:none;" onchange="handleImportFile(event)">
         </div>
       </div>
       <div style="font-size:11px; color:var(--text-dim); margin:-10px 0 14px 0;">Open entries into the same contract (ticker, type, strike, expiration, side) are combined into one row with a blended average price. Closed trades are listed individually so each exit keeps its own price and date.</div>
@@ -1475,7 +1567,6 @@ function isSameCalendarDay(a,b){
 function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj){
   const holder = document.getElementById('decayChartHolder');
   const slider = document.getElementById('decaySlider');
-  const closeRow = document.getElementById('intradayCloseRow');
   const today = new Date();
   today.setHours(0,0,0,0);
 
@@ -1483,17 +1574,14 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
     holder.innerHTML = '<div style="color:#7C8798; font-size:12px; padding: 20px 0;">Set a future (or today\'s) expiration date to see the decay curve.</div>';
     decayState = null;
     slider.disabled = true;
-    closeRow.style.display = 'none';
     return;
   }
 
   const sameDay = isSameCalendarDay(today, expObj);
 
   if(sameDay){
-    closeRow.style.display = '';
     drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis);
   } else {
-    closeRow.style.display = 'none';
     drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj,today);
   }
 }
@@ -1584,7 +1672,7 @@ function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costB
 function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis){
   const holder = document.getElementById('decayChartHolder');
   const slider = document.getElementById('decaySlider');
-  const closeTimeVal = document.getElementById('intradayCloseTime').value || '13:00';
+  const closeTimeVal = document.getElementById('marketCloseTime').value || '13:00';
 
   const now = new Date();
   const todayStr = now.toISOString().slice(0,10);
@@ -1731,8 +1819,6 @@ document.getElementById('decaySlider').addEventListener('input', (e)=>{
   updateScrubMarker(parseInt(e.target.value,10));
 });
 
-document.getElementById('intradayCloseTime').addEventListener('input', calc);
-
 function exportTrades(){
   const trades = loadTrades();
   if(trades.length===0){
@@ -1756,6 +1842,12 @@ function handleImportFile(event){
   if(!file) return;
 
   const reader = new FileReader();
+
+  reader.onerror = function(){
+    alert('Could not read that file. Please try again.');
+    event.target.value = '';
+  };
+
   reader.onload = function(e){
     let imported;
     try{
@@ -1767,26 +1859,68 @@ function handleImportFile(event){
       return;
     }
 
-    const existing = loadTrades();
-    const existingIds = new Set(existing.map(t=>t.id));
-    let added = 0, skipped = 0;
+    try{
+      const existing = loadTrades();
+      const existingIds = new Set(existing.map(t=>t.id));
+      let added = 0, skipped = 0, invalid = 0;
 
-    imported.forEach(t=>{
-      if(t && t.id && !existingIds.has(t.id)){
+      imported.forEach(t=>{
+        if(!t || typeof t !== 'object'){ invalid++; return; }
+
+        const isValid = typeof t.id === 'string'
+          && (t.type==='call' || t.type==='put')
+          && (t.side==='long' || t.side==='short')
+          && typeof t.strike === 'number' && !isNaN(t.strike)
+          && typeof t.contracts === 'number' && !isNaN(t.contracts)
+          && typeof t.entryPremium === 'number' && !isNaN(t.entryPremium)
+          && (t.status==='open' || t.status==='closed');
+
+        if(!isValid){ invalid++; return; }
+
+        if(existingIds.has(t.id)){
+          skipped++;
+          return;
+        }
+
         existing.push(t);
         existingIds.add(t.id);
         added++;
-      } else {
-        skipped++;
-      }
-    });
+      });
 
-    saveTrades(existing);
-    renderTradeTable();
-    alert('Import complete: ' + added + ' trade(s) added' + (skipped>0 ? ', ' + skipped + ' skipped (already present).' : '.'));
+      saveTrades(existing);
+      renderTradeTable();
+
+      let msg = 'Import complete: ' + added + ' trade(s) added.';
+      if(skipped>0) msg += ' ' + skipped + ' skipped (already present).';
+      if(invalid>0) msg += ' ' + invalid + ' skipped (missing or invalid data).';
+      alert(msg);
+    }catch(err){
+      console.error('Import failed:', err);
+      alert('Something went wrong while importing this file. Check the browser console for details, or let Claude know what happened.');
+    }
+
     event.target.value = '';
   };
+
   reader.readAsText(file);
+}
+
+const MANUAL_ENTRY_KEY = 'optionsPnlTerminal_manualEntryExpanded';
+
+function toggleManualEntry(){
+  const body = document.getElementById('manualEntryBody');
+  const arrow = document.getElementById('manualEntryArrow');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  arrow.classList.toggle('open', !isOpen);
+  try{ localStorage.setItem(MANUAL_ENTRY_KEY, (!isOpen).toString()); }catch(e){}
+}
+
+function initManualEntryState(){
+  let expanded = false;
+  try{ expanded = localStorage.getItem(MANUAL_ENTRY_KEY) === 'true'; }catch(e){}
+  document.getElementById('manualEntryBody').style.display = expanded ? '' : 'none';
+  document.getElementById('manualEntryArrow').classList.toggle('open', expanded);
 }
 
 function showTab(tab){
@@ -2705,7 +2839,7 @@ function initDates(){
   const exp = new Date(today.getTime() + 45*24*60*60*1000);
   const sell = new Date(today.getTime() + 20*24*60*60*1000);
   document.getElementById('expDate').value = exp.toISOString().slice(0,10);
-  document.getElementById('sellDate').value = sell.toISOString().slice(0,10);
+  document.getElementById('sellDateTime').value = toLocalDateTimeInputValue(sell);
 }
 
 document.querySelectorAll('input').forEach(el=>{
@@ -2715,6 +2849,7 @@ document.querySelectorAll('input').forEach(el=>{
 initDates();
 calc();
 renderTradeTable();
+initManualEntryState();
 </script>
 </body>
 </html>

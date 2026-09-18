@@ -1656,7 +1656,6 @@ function calc(){
   document.getElementById('statGamma').textContent = g.gamma.toFixed(4);
   document.getElementById('statVega').textContent = fmtMoney(g.vega*multiplier*sideMult);
 
-  document.getElementById('decayTitle').textContent = 'Time decay: P&L if stock stays at $' + S.toFixed(2);
   const expObj = expStr ? new Date(expStr+'T00:00:00') : null;
   const sellObj = sellDateTime;
   drawDecayChart(K,r,sigma,optType,premium,multiplier,side,S,costBasis,expObj,sellObj);
@@ -1684,8 +1683,10 @@ function drawDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,
   const sameDay = isSameCalendarDay(today, expObj);
 
   if(sameDay){
-    drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis);
+    document.getElementById('decayTitle').textContent = 'Breakeven price throughout the day';
+    drawIntradayBreakevenChart(K,r,sigma,type,premium);
   } else {
+    document.getElementById('decayTitle').textContent = 'Time decay: P&L if stock stays at $' + fixedS.toFixed(2);
     drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis,expObj,sellObj,today);
   }
 }
@@ -1698,7 +1699,7 @@ function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costB
 
   const totalDays = daysBetween(today, expObj);
   const w = 1000, h = 300;
-  const padL = 60, padR = 20, padT = 30, padB = 34;
+  const padL = 10, padR = 62, padT = 16, padB = 30;
   const plotW = w-padL-padR, plotH = h-padT-padB;
 
   const pts = [];
@@ -1728,17 +1729,17 @@ function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costB
     linePath += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
   });
   const firstX = xPix(0), lastX = xPix(totalDays);
-  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+zeroY.toFixed(1)+' L'+firstX.toFixed(1)+','+zeroY.toFixed(1)+' Z';
+  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+(h-padB).toFixed(1)+' L'+firstX.toFixed(1)+','+(h-padB).toFixed(1)+' Z';
   const endPct = pts[pts.length-1].pct;
-  const areaColor = endPct>=0 ? 'rgba(61,220,132,0.10)' : 'rgba(255,92,92,0.10)';
+  const lineColor = endPct>=0 ? '#3DDC84' : '#FF5C5C';
 
   let gridLines = '';
   const numGrid = 5;
   for(let i=0;i<=numGrid;i++){
     const val = minPct + (maxPct-minPct)*i/numGrid;
     const y = yPix(val);
-    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#232B3D" stroke-width="1"/>`;
-    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7C8798">${val.toFixed(0)}%</text>`;
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#1B2230" stroke-width="1"/>`;
+    gridLines += `<text x="${w-padR+8}" y="${(y+3.5).toFixed(1)}" text-anchor="start" font-size="10" fill="#7C8798">${val.toFixed(0)}%</text>`;
   }
 
   let xLabels = '';
@@ -1753,16 +1754,23 @@ function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costB
 
   const svg = `
   <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="decayGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lineColor}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     ${gridLines}
-    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#F0B429" stroke-width="1.2" stroke-dasharray="4,3"/>
-    <path d="${areaPath}" fill="${areaColor}"/>
-    <path d="${linePath}" fill="none" stroke="#F0B429" stroke-width="2"/>
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#F0B429" stroke-width="1" stroke-dasharray="3,3"/>
+    <path d="${areaPath}" fill="url(#decayGradient)"/>
+    <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1.75"/>
     ${xLabels}
     <g id="scrubMarker"></g>
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent" id="crosshairCatcher" style="cursor:crosshair;"/>
   </svg>`;
   holder.innerHTML = svg;
 
-  decayState = { mode:'daily', pts, xPix, yPix, padT, padB, h, baseTime: today };
+  decayState = { mode:'daily', pts, xPix, yPix, padT, padB, padL, padR, w, h, plotW, totalUnits: totalDays, baseTime: today, valueColor: lineColor };
 
   slider.max = totalDays;
   let sliderIdx = parseInt(slider.value, 10);
@@ -1771,9 +1779,10 @@ function drawDailyDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costB
   }
   slider.value = sliderIdx;
   updateScrubMarker(sliderIdx);
+  setupCrosshairInteractivity();
 }
 
-function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,costBasis){
+function drawIntradayBreakevenChart(K,r,sigma,type,premium){
   const holder = document.getElementById('decayChartHolder');
   const slider = document.getElementById('decaySlider');
   const closeTimeVal = document.getElementById('marketCloseTime').value || '13:00';
@@ -1792,57 +1801,52 @@ function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,co
 
   const totalMinutes = Math.round((closeDateTime - now)/60000);
   const w = 1000, h = 300;
-  const padL = 60, padR = 20, padT = 30, padB = 34;
+  const padL = 10, padR = 68, padT = 16, padB = 30;
   const plotW = w-padL-padR, plotH = h-padT-padB;
 
   const pts = [];
-  let minPct = Infinity, maxPct = -Infinity;
+  let minPrice = Infinity, maxPrice = -Infinity;
   const step = Math.max(1, Math.round(totalMinutes/200)); // cap resolution for very long windows
   for(let m=0; m<=totalMinutes; m+=step){
     const minutesLeft = totalMinutes - m;
     const T = minutesLeft/(365*24*60);
-    const val = bsPrice(fixedS,K,T,r,sigma,type);
-    const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
-    const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
-    pts.push({ idx:m, pct, dollarPL: pl });
-    if(pct<minPct) minPct=pct;
-    if(pct>maxPct) maxPct=pct;
+    const breakeven = findBreakeven(K,T,r,sigma,type,premium);
+    pts.push({ idx:m, price: breakeven });
+    if(breakeven<minPrice) minPrice=breakeven;
+    if(breakeven>maxPrice) maxPrice=breakeven;
   }
   if(pts[pts.length-1].idx !== totalMinutes){
-    const T = 0;
-    const val = bsPrice(fixedS,K,T,r,sigma,type);
-    const pl = side==='long' ? (val-premium)*multiplier : (premium-val)*multiplier;
-    const pct = costBasis!==0 ? (pl/costBasis)*100 : 0;
-    pts.push({ idx: totalMinutes, pct, dollarPL: pl });
-    if(pct<minPct) minPct=pct;
-    if(pct>maxPct) maxPct=pct;
+    const breakeven = findBreakeven(K,0,r,sigma,type,premium);
+    pts.push({ idx: totalMinutes, price: breakeven });
+    if(breakeven<minPrice) minPrice=breakeven;
+    if(breakeven>maxPrice) maxPrice=breakeven;
   }
-  if(minPct>0) minPct=0;
-  if(maxPct<0) maxPct=0;
-  const pad = (maxPct-minPct)*0.1 || 10;
-  minPct -= pad; maxPct += pad;
+
+  // Include the strike as a reference point in the visible range
+  if(K<minPrice) minPrice = K;
+  if(K>maxPrice) maxPrice = K;
+  const pad = (maxPrice-minPrice)*0.15 || Math.max(K*0.02, 1);
+  minPrice -= pad; maxPrice += pad;
 
   function xPix(m){ return padL + (m/Math.max(totalMinutes,1))*plotW; }
-  function yPix(p){ return padT + (1-(p-minPct)/(maxPct-minPct))*plotH; }
-  const zeroY = yPix(0);
+  function yPix(p){ return padT + (1-(p-minPrice)/(maxPrice-minPrice))*plotH; }
+  const strikeY = yPix(K);
 
   let linePath = '';
   pts.forEach((pt,i)=>{
-    const x = xPix(pt.idx), y = yPix(pt.pct);
+    const x = xPix(pt.idx), y = yPix(pt.price);
     linePath += (i===0?'M':'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
   });
   const firstX = xPix(0), lastX = xPix(totalMinutes);
-  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+zeroY.toFixed(1)+' L'+firstX.toFixed(1)+','+zeroY.toFixed(1)+' Z';
-  const endPct = pts[pts.length-1].pct;
-  const areaColor = endPct>=0 ? 'rgba(61,220,132,0.10)' : 'rgba(255,92,92,0.10)';
+  const areaPath = linePath + 'L'+lastX.toFixed(1)+','+(h-padB).toFixed(1)+' L'+firstX.toFixed(1)+','+(h-padB).toFixed(1)+' Z';
 
   let gridLines = '';
   const numGrid = 5;
   for(let i=0;i<=numGrid;i++){
-    const val = minPct + (maxPct-minPct)*i/numGrid;
+    const val = minPrice + (maxPrice-minPrice)*i/numGrid;
     const y = yPix(val);
-    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#232B3D" stroke-width="1"/>`;
-    gridLines += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#7C8798">${val.toFixed(0)}%</text>`;
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#1B2230" stroke-width="1"/>`;
+    gridLines += `<text x="${w-padR+8}" y="${(y+3.5).toFixed(1)}" text-anchor="start" font-size="10" fill="#7C8798">$${val.toFixed(2)}</text>`;
   }
 
   let xLabels = '';
@@ -1857,16 +1861,24 @@ function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,co
 
   const svg = `
   <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="breakevenGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F0B429" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="#F0B429" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     ${gridLines}
-    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="#F0B429" stroke-width="1.2" stroke-dasharray="4,3"/>
-    <path d="${areaPath}" fill="${areaColor}"/>
-    <path d="${linePath}" fill="none" stroke="#F0B429" stroke-width="2"/>
+    <line x1="${padL}" y1="${strikeY.toFixed(1)}" x2="${w-padR}" y2="${strikeY.toFixed(1)}" stroke="#7C8798" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="${padL+4}" y="${(strikeY-5).toFixed(1)}" text-anchor="start" font-size="9" fill="#7C8798">Strike $${K.toFixed(2)}</text>
+    <path d="${areaPath}" fill="url(#breakevenGradient)"/>
+    <path d="${linePath}" fill="none" stroke="#F0B429" stroke-width="1.75"/>
     ${xLabels}
     <g id="scrubMarker"></g>
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent" id="crosshairCatcher" style="cursor:crosshair;"/>
   </svg>`;
   holder.innerHTML = svg;
 
-  decayState = { mode:'intraday', pts, xPix, yPix, padT, padB, h, baseTime: now };
+  decayState = { mode:'breakeven', pts, xPix, yPix, padT, padB, padL, padR, w, h, plotW, totalUnits: totalMinutes, baseTime: now };
 
   slider.max = totalMinutes;
   slider.step = step;
@@ -1876,6 +1888,7 @@ function drawIntradayDecayChart(K,r,sigma,type,premium,multiplier,side,fixedS,co
   }
   slider.value = sliderIdx;
   updateScrubMarker(sliderIdx);
+  setupCrosshairInteractivity();
 }
 
 function nearestPointIndex(pts, idx){
@@ -1889,19 +1902,31 @@ function nearestPointIndex(pts, idx){
 
 function updateScrubMarker(idx){
   if(!decayState) return;
-  const { pts, xPix, yPix, padT, h, padB, baseTime, mode } = decayState;
+  const { pts, xPix, yPix, padT, padB, padL, padR, w, h, baseTime, mode } = decayState;
   const i = nearestPointIndex(pts, idx);
   const pt = pts[i];
+
+  if(mode==='breakeven'){
+    const x = xPix(pt.idx), y = yPix(pt.price);
+    const g = document.getElementById('scrubMarker');
+    if(g){
+      g.innerHTML = `
+        <line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#7C8798" stroke-width="1" stroke-dasharray="2,3"/>
+        <line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h-padB}" stroke="#7C8798" stroke-width="1" stroke-dasharray="2,3"/>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#F0B429" stroke="#0B0E14" stroke-width="1.5"/>
+        <rect x="${(w-padR+2).toFixed(1)}" y="${(y-9).toFixed(1)}" width="${padR-4}" height="18" rx="3" fill="#F0B429"/>
+        <text x="${(w-padR+2+((padR-4)/2)).toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="#0B0E14">${fmtMoney(pt.price)}</text>
+      `;
+    }
+    const timeLabel = new Date(baseTime.getTime()+pt.idx*60000);
+    const labelStr = timeLabel.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+    document.getElementById('sliderReadout').innerHTML =
+      `${labelStr} &nbsp; <span class="pos" style="color:var(--amber);">Breakeven: ${fmtMoney(pt.price)}</span>`;
+    return;
+  }
+
   const x = xPix(pt.idx), y = yPix(pt.pct);
   const color = pt.pct>=0 ? '#3DDC84' : '#FF5C5C';
-
-  const g = document.getElementById('scrubMarker');
-  if(g){
-    g.innerHTML = `
-      <line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h-padB}" stroke="#7C8798" stroke-width="1" stroke-dasharray="3,3"/>
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${color}" stroke="#0B0E14" stroke-width="2"/>
-    `;
-  }
 
   let labelStr;
   if(mode==='intraday'){
@@ -1915,8 +1940,49 @@ function updateScrubMarker(idx){
   const dollarStr = fmtMoney(pt.dollarPL);
   const cls = pt.pct>=0 ? 'pos' : 'neg';
 
+  const g = document.getElementById('scrubMarker');
+  if(g){
+    g.innerHTML = `
+      <line x1="${padL}" y1="${y.toFixed(1)}" x2="${w-padR}" y2="${y.toFixed(1)}" stroke="#7C8798" stroke-width="1" stroke-dasharray="2,3"/>
+      <line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${h-padB}" stroke="#7C8798" stroke-width="1" stroke-dasharray="2,3"/>
+      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${color}" stroke="#0B0E14" stroke-width="1.5"/>
+      <rect x="${(w-padR+2).toFixed(1)}" y="${(y-9).toFixed(1)}" width="${padR-4}" height="18" rx="3" fill="${color}"/>
+      <text x="${(w-padR+2+((padR-4)/2)).toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="#0B0E14">${pctStr}</text>
+    `;
+  }
+
   document.getElementById('sliderReadout').innerHTML =
     `${labelStr} &nbsp; <span class="${cls}">${pctStr} (${dollarStr})</span>`;
+}
+
+function setupCrosshairInteractivity(){
+  const svg = document.querySelector('#decayChartHolder svg');
+  const catcher = document.getElementById('crosshairCatcher');
+  if(!svg || !catcher) return;
+
+  const slider = document.getElementById('decaySlider');
+
+  const handleMove = (evt)=>{
+    if(!decayState) return;
+    const rect = svg.getBoundingClientRect();
+    const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+    const scale = decayState.w / rect.width;
+    const pixelX = (clientX - rect.left) * scale;
+    let idx = ((pixelX - decayState.padL) / decayState.plotW) * decayState.totalUnits;
+    idx = Math.max(0, Math.min(decayState.totalUnits, idx));
+    updateScrubMarker(idx);
+    slider.value = Math.round(idx);
+    evt.preventDefault();
+  };
+
+  const handleLeave = ()=>{
+    if(!decayState) return;
+    updateScrubMarker(parseInt(slider.value,10));
+  };
+
+  catcher.addEventListener('mousemove', handleMove);
+  catcher.addEventListener('touchmove', handleMove, { passive:false });
+  catcher.addEventListener('mouseleave', handleLeave);
 }
 
 document.getElementById('decaySlider').addEventListener('input', (e)=>{
